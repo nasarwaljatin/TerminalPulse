@@ -1,8 +1,3 @@
-# GitHub Actions CI for TerminalPulse.
-# To enable it, create .github/workflows/ci.yml in the repo with exactly this content
-# (on github.com: Add file -> Create new file). Kept here because pushing workflow files
-# from the command line needs a token with the `workflow` scope.
-
 name: CI
 
 on:

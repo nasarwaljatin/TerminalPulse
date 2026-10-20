@@ -33,7 +33,7 @@ flowchart LR
 | `shared/fault-profiles.json` | One source of truth for terminal behaviour, read by both the simulator and the ML data generator. |
 | `deploy/` | Mosquitto config, Kubernetes manifests (HPA 2→6), EC2/k3s bootstrap. |
 | `render.yaml` | One-click free deployment (Render Blueprint). |
-| `deploy/github-actions-ci.yml` | CI workflow (build, ML recall gate, 100K reconciliation test, load test, GHCR images). Copy it to `.github/workflows/ci.yml` to enable it, as described in the deploy steps below. |
+| `.github/workflows/ci.yml` | Build, ML recall gate, 100K reconciliation test, load test, GHCR images. |
 
 ## How the resume claims map to code
 
@@ -95,7 +95,7 @@ Nothing needs to be installed on your computer: Render builds the Docker images 
 | Anomaly model | Render web service (free) | `services/ml/Dockerfile` |
 | Redis Streams + pub/sub | Render Key Value (free, 25 MB) | |
 | PostgreSQL | Neon (free, 0.5 GB) | |
-| Tests: 100K reconciliation, 5,000 msg/s load test, ML recall | GitHub Actions (free for public repos) | `.github/workflows/ci.yml` (from `deploy/github-actions-ci.yml`) with real Postgres, Redis and Mosquitto |
+| Tests: 100K reconciliation, 5,000 msg/s load test, ML recall | GitHub Actions (free for public repos) | `.github/workflows/ci.yml` with real Postgres, Redis and Mosquitto |
 
 **1. Put the code on GitHub.** Create an empty public repository named `terminalpulse` on github.com (no README), then from this folder:
 
@@ -107,7 +107,7 @@ git remote add origin https://github.com/<your-username>/terminalpulse.git
 git push -u origin main
 ```
 
-**Turn on CI (one-time, in the browser).** In the repo on github.com choose **Add file → Create new file**, name it `.github/workflows/ci.yml`, paste the contents of `deploy/github-actions-ci.yml`, and click **Commit changes**. (Creating it on github.com needs no special token permission; pushing workflow files from the command line needs a token with the `workflow` scope.) Then open the **Actions** tab: the *Reconciliation* job prints the 100K-transaction ledger check and the 5,000 msg/s load-test percentiles. Run `git pull` locally afterwards so your copy has the file too.
+The push starts the CI workflow. Open the repo's **Actions** tab: the *Reconciliation* job prints the 100K-transaction ledger check and the 5,000 msg/s load-test percentiles.
 
 **2. Create the database (Neon).** Sign up at [neon.tech](https://neon.tech) → *New project* (pick region **AWS US West (Oregon)**, next to Render's default region) → *Connect* → copy the connection string. It looks like `postgresql://user:pass@ep-xxx.us-west-2.aws.neon.tech/neondb?sslmode=require`.
    *Using Supabase instead?* Copy the **Session pooler** URI and change the end to `?sslmode=no-verify`, because the pooler's certificate fails strict verification.
