@@ -1,5 +1,9 @@
 # TerminalPulse: IoT Payment Terminal Fleet Platform
 
+[![CI](https://github.com/nasarwaljatin/TerminalPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/nasarwaljatin/TerminalPulse/actions/workflows/ci.yml)
+
+**Live demo: [terminalpulse.onrender.com](https://terminalpulse.onrender.com)**: a simulated fleet of 150 terminals streaming into the live dashboard. It runs on a free instance, so the first visit after a quiet period takes about a minute to wake up.
+
 TerminalPulse ingests transactions and heartbeats from a fleet of POS terminals over MQTT, persists them exactly once, streams fleet health to a live dashboard, flags faulty terminals with an Isolation Forest, and gives Claude six fleet-triage tools over the Model Context Protocol.
 
 ```mermaid
