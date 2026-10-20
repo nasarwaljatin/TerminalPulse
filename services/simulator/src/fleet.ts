@@ -151,6 +151,14 @@ export class Fleet {
       if (i % 50 === 49) await sleep(100);
     }
     await Promise.all(connected);
+    // Start every terminal's schedule now, spread over its first interval. Connecting 1,000 clients
+    // takes seconds; schedules set at construction time would all be overdue and fire as one burst.
+    const startAt = Date.now();
+    for (const t of this.terminals) {
+      const ratePerSec = opts.rate > 0 ? opts.rate / opts.terminals : t.p.txnPerMin / 60;
+      t.nextTxnAt = startAt + this.rng.uniform(0, 1000 / ratePerSec);
+      t.nextHbAt = startAt + this.rng.uniform(0, this.profiles.heartbeatIntervalS * 1000);
+    }
     opts.log?.(`fleet online: ${opts.terminals} terminals over ${n} MQTT connections`);
     this.timer = setInterval(() => this.tick(), 20);
     if (opts.faultDrift) this.driftTimer = setInterval(() => this.drift(), 60_000);
