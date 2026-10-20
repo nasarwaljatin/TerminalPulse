@@ -43,10 +43,13 @@ PERCENT_FEATURES = {"decline_rate", "error_rate", "hb_missing_ratio"}
 
 
 def load_profiles() -> dict:
+    here = Path(__file__).resolve().parents
     candidates = [
         os.environ.get("PROFILES_PATH"),
-        Path(__file__).resolve().parents[3] / "shared" / "fault-profiles.json",
-        Path(__file__).resolve().parents[1] / "fault-profiles.json",
+        # Repo checkout: services/ml/app/features.py -> <repo>/shared. In a container the file is
+        # /app/app/features.py, which has no 4th parent, so look it up safely.
+        here[3] / "shared" / "fault-profiles.json" if len(here) > 3 else None,
+        here[1] / "fault-profiles.json",
         Path.cwd() / "shared" / "fault-profiles.json",
     ]
     for c in candidates:
