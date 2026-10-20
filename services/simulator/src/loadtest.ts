@@ -77,6 +77,10 @@ const result = {
   duplicatesSuppressed: gw.idempotency?.duplicatesSuppressed,
 };
 console.log(JSON.stringify(result, null, 2));
+console.log('[load] latency timeline (5 s buckets, from test start): n / p50 / p99 / max ms');
+for (const b of lat.timeline ?? []) {
+  console.log(`[load]   +${String(Math.round((b.t - startMs) / 1000)).padStart(3)}s  ${String(b.n).padStart(6)}  ${b.p50} / ${b.p99} / ${b.max}`);
+}
 
 if (maxP99 > 0 && (lat.p99 === null || lat.p99 > maxP99)) {
   console.error(`[load] FAIL: p99 ${lat.p99} ms > ${maxP99} ms`);

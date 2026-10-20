@@ -99,7 +99,21 @@ jobs:
           ROLES=ingest,persist INSTANCE_ID=gw-b PORT=8082 nohup node services/gateway/dist/index.js >> gw-b.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8081/readyz && curl -sf localhost:8082/readyz && break; sleep 1; done
       - name: Publish-to-persist load test (5,000 msg/s from 1,000 terminals, p99 gate 200 ms)
-        run: node services/simulator/dist/loadtest.js --terminals 1000 --rate 5000 --duration 60 --api http://localhost:8080 --max-p99 200
+        run: |
+          (vmstat 5 > vmstat.log &)
+          node services/simulator/dist/loadtest.js --terminals 1000 --rate 5000 --duration 60 --api http://localhost:8080 --max-p99 200
+      - name: Load-test diagnostics
+        if: always()
+        run: |
+          echo "== vmstat (5 s): r = run queue, us/sy/wa = CPU user/system/iowait"; cat vmstat.log || true
+          node -e "
+            const pg = require('pg'); const c = new pg.Client(process.env.DATABASE_URL);
+            c.connect().then(async () => {
+              const cp = await c.query('SELECT * FROM pg_stat_checkpointer').catch(() => c.query('SELECT checkpoints_timed, checkpoints_req, checkpoint_write_time, checkpoint_sync_time FROM pg_stat_bgwriter'));
+              console.log('checkpoints:', JSON.stringify(cp.rows[0]));
+              const s = await c.query(\"SELECT name, setting FROM pg_settings WHERE name IN ('max_wal_size','checkpoint_timeout','synchronous_commit','shared_buffers')\");
+              console.log('settings:', JSON.stringify(s.rows)); await c.end();
+            });"
       - name: Pipeline metrics
         if: always()
         run: |

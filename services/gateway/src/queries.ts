@@ -214,5 +214,24 @@ export async function latencyStats(sinceMs: number) {
   );
   const r = res.rows[0];
   const round = (v: number | null) => (v === null ? null : Math.round(v * 10) / 10);
-  return { count: r.count, firstTs: r.firstTs, lastPersisted: r.lastPersisted, p50: round(r.p50), p95: round(r.p95), p99: round(r.p99), max: round(r.max) };
+  // Per-5-second buckets (by device time) show *when* any tail latency happened.
+  const timeline = await pool.query(
+    `SELECT (floor(extract(epoch from device_ts) / 5) * 5000)::bigint AS t, count(*)::int AS n,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY ms) AS p50,
+            percentile_cont(0.99) WITHIN GROUP (ORDER BY ms) AS p99, max(ms) AS max
+       FROM (SELECT device_ts, extract(epoch from persisted_at - device_ts) * 1000 AS ms
+               FROM transactions WHERE device_ts >= to_timestamp($1 / 1000.0)) x
+      GROUP BY 1 ORDER BY 1`,
+    [sinceMs],
+  );
+  return {
+    count: r.count,
+    firstTs: r.firstTs,
+    lastPersisted: r.lastPersisted,
+    p50: round(r.p50),
+    p95: round(r.p95),
+    p99: round(r.p99),
+    max: round(r.max),
+    timeline: timeline.rows.map((b) => ({ t: Number(b.t), n: b.n, p50: round(b.p50), p99: round(b.p99), max: round(b.max) })),
+  };
 }
