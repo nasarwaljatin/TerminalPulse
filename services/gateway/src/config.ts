@@ -44,7 +44,7 @@ export const config = {
     str('MQTT_SHARED_GROUP', bool('MQTT_EMBEDDED', false) ? 'none' : 'tp-gateway'),
   ),
   /** Parallel MQTT connections per ingest process. mqtt.js handles a connection's QoS 1 messages one at a time, so parallelism comes from connections. */
-  mqttIngestConnections: int('MQTT_INGEST_CONNECTIONS', 4),
+  mqttIngestConnections: int('MQTT_INGEST_CONNECTIONS', 16),
   topicPrefix: str('MQTT_TOPIC_PREFIX', 'tp/terminals'),
 
   /** Run an in-process Aedes broker (single-container deploys such as Render free tier). */

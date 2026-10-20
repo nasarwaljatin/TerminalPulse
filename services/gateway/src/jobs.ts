@@ -37,26 +37,38 @@ export type FeatureRow = {
   };
 };
 
+/**
+ * Features only count data observed since this process started. A restart (a redeploy, or a free
+ * instance waking from sleep, which also restarts the bundled simulator) leaves a gap in every
+ * terminal's history; without this the model reads that gap as missed heartbeats and reboots and
+ * flags the whole fleet. After a restart, scoring therefore resumes once MIN_HISTORY_S has passed.
+ */
+const observedSince = new Date();
+
 /** Per-terminal feature vector over the scoring window. Must match services/ml/app/features.py. */
-export async function computeFeatures(windowS = config.scoreWindowS, minHistoryS = config.minHistoryS): Promise<FeatureRow[]> {
+export async function computeFeatures(
+  windowS = config.scoreWindowS,
+  minHistoryS = config.minHistoryS,
+  since: Date = observedSince,
+): Promise<FeatureRow[]> {
   const res = await pool.query(
     `WITH tx AS (
        SELECT terminal_id, count(*)::float8 AS n,
               avg((status = 'declined')::int)::float8 AS decline_rate,
               avg((status = 'error')::int)::float8 AS error_rate,
               avg(auth_latency_ms)::float8 AS avg_latency_ms
-         FROM transactions WHERE device_ts > now() - make_interval(secs => $1)
+         FROM transactions WHERE device_ts > greatest(now() - make_interval(secs => $1), $3::timestamptz)
         GROUP BY terminal_id
      ), hb AS (
        SELECT terminal_id, count(*)::float8 AS hb_count,
               avg(battery)::float8 AS avg_battery, avg(signal_dbm)::float8 AS avg_signal_dbm,
               avg(temperature_c)::float8 AS avg_temperature_c, avg(queue_depth)::float8 AS avg_queue_depth,
               (max(boot_count) - min(boot_count))::float8 AS reboots
-         FROM heartbeats WHERE device_ts > now() - make_interval(secs => $1)
+         FROM heartbeats WHERE device_ts > greatest(now() - make_interval(secs => $1), $3::timestamptz)
         GROUP BY terminal_id
      )
      SELECT t.id AS terminal_id,
-            least($1::float8, extract(epoch from now() - t.first_seen)) AS span_s,
+            least($1::float8, extract(epoch from now() - greatest(t.first_seen, $3::timestamptz))) AS span_s,
             COALESCE(tx.n, 0) AS n, COALESCE(tx.decline_rate, 0) AS decline_rate,
             COALESCE(tx.error_rate, 0) AS error_rate, tx.avg_latency_ms,
             COALESCE(hb.hb_count, 0) AS hb_count,
@@ -68,8 +80,8 @@ export async function computeFeatures(windowS = config.scoreWindowS, minHistoryS
        FROM terminals t
        LEFT JOIN tx ON tx.terminal_id = t.id
        LEFT JOIN hb ON hb.terminal_id = t.id
-      WHERE t.first_seen < now() - make_interval(secs => $2)`,
-    [windowS, minHistoryS],
+      WHERE greatest(t.first_seen, $3::timestamptz) < now() - make_interval(secs => $2)`,
+    [windowS, minHistoryS, since],
   );
   return res.rows.map((r) => {
     const span = Math.max(Number(r.span_s), 1);

@@ -45,6 +45,9 @@ await sleep(durationS * 1000);
 clearInterval(progress);
 const published = fleet.stats.txnPublished - startPublished;
 const hbPublished = fleet.stats.hbPublished;
+// Simulator -> broker PUBACK time. If this is high the bottleneck is the publisher or broker,
+// not the gateway pipeline.
+const pubackMs = fleet.ackLatency();
 await fleet.stop();
 const endMs = Date.now();
 
@@ -69,6 +72,7 @@ const result = {
   messagesPerSecIncludingHeartbeats: Math.round(msgs / (seconds + warmupS)),
   txnPersisted: lat.count,
   publishToPersistMs: { p50: lat.p50, p95: lat.p95, p99: lat.p99, max: lat.max },
+  simulatorPubackMs: { p50: pubackMs.p50, p99: pubackMs.p99 },
   gatewayInstanceLatencyMs: gw.latencyMs,
   duplicatesSuppressed: gw.idempotency?.duplicatesSuppressed,
 };

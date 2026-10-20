@@ -23,7 +23,7 @@ spec:
             - { name: ROLES, value: "ingest,persist" }
             - name: INSTANCE_ID
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
-            - { name: MQTT_INGEST_CONNECTIONS, value: "4" }
+            - { name: MQTT_INGEST_CONNECTIONS, value: "16" }
             - { name: PERSIST_CONCURRENCY, value: "2" }
           ports: [{ containerPort: 8080 }]
           readinessProbe:

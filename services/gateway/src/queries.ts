@@ -1,11 +1,17 @@
 import { config } from './config.js';
 import { pool } from './db.js';
 
+/**
+ * A verdict counts only while it is fresh: verdicts from before a restart (or from a stopped
+ * scorer) expire instead of lingering on the dashboard.
+ */
+const FRESH_FLAG_SQL = `(a.flagged AND a.scored_at > now() - make_interval(secs => ${Math.max(config.scoreIntervalS * 3, 180)}))`;
+
 /** Derived status: offline if no heartbeat recently, flagged if the anomaly model says so, else online. */
 const STATUS_SQL = `
   CASE
     WHEN t.last_seen IS NULL OR t.last_seen < now() - make_interval(secs => $1) THEN 'offline'
-    WHEN a.flagged THEN 'flagged'
+    WHEN ${FRESH_FLAG_SQL} THEN 'flagged'
     ELSE 'online'
   END`;
 
@@ -14,7 +20,7 @@ const TERMINAL_COLUMNS = `
   t.first_seen AS "firstSeen", t.last_seen AS "lastSeen", t.battery, t.signal_dbm AS "signalDbm",
   t.temperature_c AS "temperatureC", t.queue_depth AS "queueDepth", t.boot_count AS "bootCount",
   ${STATUS_SQL} AS status,
-  a.score AS "anomalyScore", COALESCE(a.flagged, false) AS flagged, COALESCE(a.reasons, '[]'::jsonb) AS reasons`;
+  a.score AS "anomalyScore", COALESCE(${FRESH_FLAG_SQL}, false) AS flagged, COALESCE(a.reasons, '[]'::jsonb) AS reasons`;
 
 export type TerminalFilter = {
   status?: 'online' | 'offline' | 'flagged';
@@ -55,7 +61,7 @@ export async function listTerminals(f: TerminalFilter = {}) {
     SELECT ${TERMINAL_COLUMNS}
       FROM terminals t LEFT JOIN anomalies a ON a.terminal_id = t.id
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     ORDER BY COALESCE(a.flagged, false) DESC, a.score DESC NULLS LAST, t.id
+     ORDER BY COALESCE(${FRESH_FLAG_SQL}, false) DESC, a.score DESC NULLS LAST, t.id
      LIMIT ${limit} OFFSET ${offset}`;
   return (await pool.query(sql, params)).rows;
 }
@@ -134,7 +140,7 @@ export async function flaggedTerminals(limit = 50) {
     await pool.query(
       `SELECT ${TERMINAL_COLUMNS}, a.features, a.scored_at AS "scoredAt"
          FROM anomalies a JOIN terminals t ON t.id = a.terminal_id
-        WHERE a.flagged
+        WHERE ${FRESH_FLAG_SQL}
         ORDER BY a.score DESC LIMIT ${Math.min(Math.max(limit, 1), 500)}`,
       [config.offlineAfterS],
     )

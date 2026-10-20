@@ -4,7 +4,7 @@ import { config } from './config.js';
 import { pool } from './db.js';
 import { log } from './log.js';
 import { metrics } from './metrics.js';
-import { parsePayload, type AckMessage, type HeartbeatMessage, type Kind, type TxnMessage } from './messages.js';
+import { parseTrusted, type AckMessage, type HeartbeatMessage, type Kind, type TxnMessage } from './messages.js';
 import { createRedis } from './redis.js';
 import { publishEvent, type BatchEvent } from './events.js';
 
@@ -119,7 +119,7 @@ async function processBatch(redis: Redis, events: Redis, entries: Entry[], opts:
 
   for (const e of entries) {
     if (!e.raw) continue;
-    const parsed = parsePayload(e.kind, e.raw);
+    const parsed = parseTrusted(e.kind, e.raw);
     if (!parsed) continue;
     if (parsed.kind === 'txn') {
       if (txns.has(parsed.msg.idempotencyKey)) inBatchDups++;

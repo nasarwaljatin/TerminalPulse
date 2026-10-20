@@ -81,20 +81,30 @@ jobs:
         run: |
           node services/gateway/dist/migrate.js
           ROLES=ingest,persist INSTANCE_ID=gw-a PORT=8081 CHAOS_NOACK_RATE=0.05 CLAIM_IDLE_MS=3000 \
-            nohup node services/gateway/dist/index.js > gw-a.log 2>&1 &
+            nohup node services/gateway/dist/index.js > gw-a.log 2>&1 & echo $! > gw-a.pid
           ROLES=ingest,persist INSTANCE_ID=gw-b PORT=8082 CHAOS_NOACK_RATE=0.05 CLAIM_IDLE_MS=3000 \
-            nohup node services/gateway/dist/index.js > gw-b.log 2>&1 &
+            nohup node services/gateway/dist/index.js > gw-b.log 2>&1 & echo $! > gw-b.pid
           ROLES=api INSTANCE_ID=api PORT=8080 nohup node services/gateway/dist/index.js > api.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8080/readyz && curl -sf localhost:8081/readyz && curl -sf localhost:8082/readyz && break; sleep 1; done
       - name: Reconcile 100K transactions with 10% forced redelivery
         run: node services/simulator/dist/reconcile.js --txns 100000 --dup-rate 0.1 --terminals 1000 --rate 5000
-      - name: Publish-to-persist load test (5,000 msg/s from 1,000 terminals)
-        run: node services/simulator/dist/loadtest.js --terminals 1000 --rate 5000 --duration 30 --api http://localhost:8080
+      - name: Restart gateway workers without chaos mode
+        # Chaos mode deliberately delays 5% of batches by CLAIM_IDLE_MS, which belongs in the
+        # exactly-once test, not in the latency measurement. Same instance ids, so the workers
+        # resume their MQTT sessions and consumer names.
+        run: |
+          curl -s localhost:8081/api/metrics > chaos-gw-a.json; curl -s localhost:8082/api/metrics > chaos-gw-b.json
+          kill "$(cat gw-a.pid)" "$(cat gw-b.pid)"; sleep 3
+          ROLES=ingest,persist INSTANCE_ID=gw-a PORT=8081 nohup node services/gateway/dist/index.js >> gw-a.log 2>&1 &
+          ROLES=ingest,persist INSTANCE_ID=gw-b PORT=8082 nohup node services/gateway/dist/index.js >> gw-b.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8081/readyz && curl -sf localhost:8082/readyz && break; sleep 1; done
+      - name: Publish-to-persist load test (5,000 msg/s from 1,000 terminals, p99 gate 200 ms)
+        run: node services/simulator/dist/loadtest.js --terminals 1000 --rate 5000 --duration 60 --api http://localhost:8080 --max-p99 200
       - name: Pipeline metrics
         if: always()
         run: |
-          curl -s localhost:8081/api/metrics; echo
-          curl -s localhost:8082/api/metrics; echo
+          echo "== reconciliation (chaos) run"; cat chaos-gw-a.json chaos-gw-b.json 2>/dev/null; echo
+          echo "== load-test run"; curl -s localhost:8081/api/metrics; echo; curl -s localhost:8082/api/metrics; echo
       - name: Gateway logs
         if: failure()
         run: tail -n 100 gw-a.log gw-b.log api.log

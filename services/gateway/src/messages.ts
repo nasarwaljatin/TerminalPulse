@@ -75,3 +75,15 @@ export function parsePayload(kind: Kind, raw: string): ParsedMessage | null {
   if (!res.success) return null;
   return { kind, msg: res.data } as ParsedMessage;
 }
+
+/**
+ * Stream entries were validated by ingest before XADD, so the persist path only needs JSON.parse.
+ * Skipping a second schema pass keeps the event loop free for the MQTT connections that share it.
+ */
+export function parseTrusted(kind: Kind, raw: string): ParsedMessage | null {
+  try {
+    return { kind, msg: JSON.parse(raw) } as ParsedMessage;
+  } catch {
+    return null;
+  }
+}
