@@ -1,0 +1,87 @@
+{
+  "$comment": "Single source of truth for terminal behaviour. The TypeScript simulator drives live terminals from these profiles and the Python ML generator samples its labeled synthetic dataset from the same numbers, so live features and training features share one distribution. Ranges are [min, max]; each terminal draws its own value uniformly once, then events are sampled around it.",
+  "version": 1,
+  "heartbeatIntervalS": 10,
+  "featureWindowS": 600,
+  "faultFraction": 0.08,
+  "faultWeights": {
+    "network_degraded": 0.3,
+    "card_reader_fault": 0.25,
+    "battery_failing": 0.2,
+    "overheating": 0.25
+  },
+  "profiles": {
+    "healthy": {
+      "txnPerMin": [1.5, 6],
+      "declineP": [0.02, 0.08],
+      "errorP": [0.0, 0.015],
+      "latencyMs": [250, 750],
+      "hbDropP": [0.0, 0.04],
+      "battery": [40, 100],
+      "signalDbm": [-88, -55],
+      "temperatureC": [30, 47],
+      "rebootsPerHour": [0, 0.1],
+      "queueDepth": [0, 1]
+    },
+    "network_degraded": {
+      "txnPerMin": [1.0, 5],
+      "declineP": [0.03, 0.1],
+      "errorP": [0.02, 0.1],
+      "latencyMs": [900, 3500],
+      "hbDropP": [0.1, 0.45],
+      "battery": [40, 100],
+      "signalDbm": [-110, -90],
+      "temperatureC": [30, 47],
+      "rebootsPerHour": [0, 0.3],
+      "queueDepth": [2, 18]
+    },
+    "card_reader_fault": {
+      "txnPerMin": [1.5, 6],
+      "declineP": [0.04, 0.14],
+      "errorP": [0.06, 0.45],
+      "latencyMs": [300, 900],
+      "hbDropP": [0.0, 0.04],
+      "battery": [40, 100],
+      "signalDbm": [-88, -55],
+      "temperatureC": [30, 47],
+      "rebootsPerHour": [0, 0.3],
+      "queueDepth": [0, 2]
+    },
+    "battery_failing": {
+      "txnPerMin": [1.0, 5],
+      "declineP": [0.02, 0.08],
+      "errorP": [0.0, 0.03],
+      "latencyMs": [250, 800],
+      "hbDropP": [0.03, 0.15],
+      "battery": [2, 18],
+      "signalDbm": [-88, -55],
+      "temperatureC": [30, 47],
+      "rebootsPerHour": [0.5, 4],
+      "queueDepth": [0, 3]
+    },
+    "overheating": {
+      "txnPerMin": [1.0, 5],
+      "declineP": [0.02, 0.08],
+      "errorP": [0.01, 0.06],
+      "latencyMs": [600, 1600],
+      "hbDropP": [0.0, 0.08],
+      "battery": [40, 100],
+      "signalDbm": [-88, -55],
+      "temperatureC": [54, 82],
+      "rebootsPerHour": [1, 5],
+      "queueDepth": [0, 3]
+    }
+  },
+  "cities": [
+    { "name": "Mumbai", "lat": 19.076, "lng": 72.8777 },
+    { "name": "Delhi", "lat": 28.6139, "lng": 77.209 },
+    { "name": "Bengaluru", "lat": 12.9716, "lng": 77.5946 },
+    { "name": "Hyderabad", "lat": 17.385, "lng": 78.4867 },
+    { "name": "Chennai", "lat": 13.0827, "lng": 80.2707 },
+    { "name": "Pune", "lat": 18.5204, "lng": 73.8567 },
+    { "name": "Kolkata", "lat": 22.5726, "lng": 88.3639 },
+    { "name": "Nagpur", "lat": 21.1458, "lng": 79.0882 }
+  ],
+  "models": ["TP-100", "TP-200", "TP-300 Android", "TP-Mini"],
+  "firmware": ["4.2.1", "4.2.3", "4.3.0"]
+}

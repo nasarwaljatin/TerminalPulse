@@ -1,0 +1,72 @@
+# Render Blueprint: free-tier deployment (Dashboard -> New -> Blueprint -> pick this repo).
+#
+#   terminalpulse       web service (free): gateway + embedded MQTT broker + simulator + dashboard
+#   terminalpulse-ml    web service (free): scikit-learn Isolation Forest scoring API
+#   terminalpulse-redis Key Value (free): Redis-compatible streams + pub/sub
+#   Postgres            bring your own free database (Neon or Supabase) via DATABASE_URL
+#
+# Free web services sleep after 15 idle minutes and wake on the next request (~1 minute).
+services:
+  - type: web
+    name: terminalpulse
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: ROLES
+        value: ingest,persist,api,jobs,sim
+      - key: DATABASE_URL
+        sync: false # paste your Neon/Supabase connection string (with ?sslmode=require)
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: terminalpulse-redis
+          property: connectionString
+      - key: ML_URL
+        sync: false # https://terminalpulse-ml.onrender.com (your ML service URL)
+      - key: MQTT_EMBEDDED
+        value: "true"
+      - key: MQTT_WS_ENABLED
+        value: "true" # lets a local simulator connect via wss://<host>/mqtt
+      - key: MQTT_USERNAME
+        value: terminal
+      - key: MQTT_PASSWORD
+        generateValue: true
+      - key: ADMIN_API_KEY
+        generateValue: true # required for remote commands (dashboard prompts for it)
+      - key: SIM_TERMINALS
+        value: "150"
+      - key: MQTT_INGEST_CONNECTIONS
+        value: "1"
+      - key: PERSIST_CONCURRENCY
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: STREAM_MAXLEN
+        value: "10000" # keeps the 25 MB free Key Value instance comfortably under its limit
+      - key: SCORE_INTERVAL_S
+        value: "60"
+      - key: RETENTION_HOURS
+        value: "6" # keeps a free 0.5 GB Postgres well under quota
+      - key: HEARTBEAT_RETENTION_HOURS
+        value: "1"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=320
+
+  - type: web
+    name: terminalpulse-ml
+    runtime: docker
+    plan: free
+    dockerfilePath: ./services/ml/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+
+  - type: keyvalue
+    name: terminalpulse-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # internal connections only

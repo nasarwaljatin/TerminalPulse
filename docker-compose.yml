@@ -1,0 +1,83 @@
+# Full stack locally: docker compose up --build   ->  dashboard on http://localhost:8080
+# Two gateway replicas share the MQTT subscription and the Redis consumer group.
+name: terminalpulse
+
+# The app image is built once (by the api service) and reused by gateway and simulator.
+x-app: &app
+  image: terminalpulse:local
+  pull_policy: never
+  restart: unless-stopped
+  environment: &env
+    DATABASE_URL: postgres://terminalpulse:terminalpulse@postgres:5432/terminalpulse
+    REDIS_URL: redis://redis:6379
+    MQTT_URL: mqtt://mosquitto:1883
+    ML_URL: http://ml:8000
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    mosquitto: { condition: service_started }
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: terminalpulse
+      POSTGRES_PASSWORD: terminalpulse
+      POSTGRES_DB: terminalpulse
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terminalpulse"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    ports: ["1883:1883"]
+    volumes: ["./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"]
+
+  ml:
+    build:
+      context: .
+      dockerfile: services/ml/Dockerfile
+    ports: ["8000:8000"]
+
+  # Stateless ingest + persist workers (what the Kubernetes HPA scales).
+  gateway:
+    <<: *app
+    deploy:
+      replicas: 2
+    environment:
+      <<: *env
+      ROLES: ingest,persist
+
+  # REST + WebSocket + dashboard + singleton jobs (anomaly scoring, retention).
+  api:
+    <<: *app
+    build: .
+    pull_policy: build
+    ports: ["8080:8080"]
+    environment:
+      <<: *env
+      ROLES: api,jobs
+
+  simulator:
+    <<: *app
+    command: ["node", "services/simulator/dist/index.js"]
+    environment:
+      MQTT_URL: mqtt://mosquitto:1883
+      SIM_TERMINALS: ${SIM_TERMINALS:-1000}
+      SIM_RATE: ${SIM_RATE:-0}
+    depends_on: [mosquitto, gateway, api]
+
+volumes:
+  pgdata:

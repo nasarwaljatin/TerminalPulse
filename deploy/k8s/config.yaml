@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: terminalpulse-config
+data:
+  DATABASE_URL: postgres://terminalpulse:terminalpulse@postgres:5432/terminalpulse
+  REDIS_URL: redis://redis:6379
+  MQTT_URL: mqtt://mosquitto:1883
+  ML_URL: http://ml:8000
+  OFFLINE_AFTER_S: "35"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: terminalpulse-secrets
+type: Opaque
+stringData:
+  # Change before exposing the API publicly; required by POST /api/terminals/:id/commands.
+  ADMIN_API_KEY: change-me

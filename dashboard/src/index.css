@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-ink-950: #060a12;
+  --color-ink-900: #0b1220;
+  --color-ink-800: #111a2c;
+  --color-ink-700: #1b2740;
+  --color-ink-600: #2a3a5c;
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --color-idle: #3b4a66;
+  --color-accent: #60a5fa;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: #dbe4f3;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(17, 26, 44, 0.92), rgba(11, 18, 32, 0.92));
+  border: 1px solid var(--color-ink-700);
+  border-radius: 14px;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+@keyframes beat {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+  100% { box-shadow: 0 0 0 5px rgba(52, 211, 153, 0); }
+}
+.beat { animation: beat 0.9s ease-out; }
+
+@keyframes livepulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot { animation: livepulse 1.6s ease-in-out infinite; }
+
+@keyframes slidein {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.drawer { animation: slidein 0.18s ease-out; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--color-ink-600); border-radius: 8px; }

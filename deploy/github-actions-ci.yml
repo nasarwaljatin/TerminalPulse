@@ -1,0 +1,139 @@
+# GitHub Actions CI for TerminalPulse.
+# To enable it, create .github/workflows/ci.yml in the repo with exactly this content
+# (on github.com: Add file -> Create new file). Kept here because pushing workflow files
+# from the command line needs a token with the `workflow` scope.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Typecheck & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  ml:
+    name: ML model (recall gate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/ml/requirements*.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python train.py
+      - run: pytest -q
+
+  reconciliation:
+    name: Reconciliation (100K txns, 10% redelivery)
+    runs-on: ubuntu-latest
+    needs: build
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: terminalpulse
+          POSTGRES_PASSWORD: terminalpulse
+          POSTGRES_DB: terminalpulse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U terminalpulse" --health-interval 2s --health-retries 30
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-retries 30
+    env:
+      DATABASE_URL: postgres://terminalpulse:terminalpulse@localhost:5432/terminalpulse
+      REDIS_URL: redis://localhost:6379
+      MQTT_URL: mqtt://localhost:1883
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w services/gateway -w services/simulator
+      - name: Start Mosquitto
+        run: |
+          docker run -d --name mosquitto -p 1883:1883 \
+            -v "$PWD/deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro" eclipse-mosquitto:2.0.20
+      - name: Start two gateway workers + API
+        # Two ingest/persist workers share the MQTT subscription and the consumer group. Chaos mode
+        # skips XACK on 5% of batches so those entries are redelivered via XAUTOCLAIM as well.
+        run: |
+          node services/gateway/dist/migrate.js
+          ROLES=ingest,persist INSTANCE_ID=gw-a PORT=8081 CHAOS_NOACK_RATE=0.05 CLAIM_IDLE_MS=3000 \
+            nohup node services/gateway/dist/index.js > gw-a.log 2>&1 &
+          ROLES=ingest,persist INSTANCE_ID=gw-b PORT=8082 CHAOS_NOACK_RATE=0.05 CLAIM_IDLE_MS=3000 \
+            nohup node services/gateway/dist/index.js > gw-b.log 2>&1 &
+          ROLES=api INSTANCE_ID=api PORT=8080 nohup node services/gateway/dist/index.js > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8080/readyz && curl -sf localhost:8081/readyz && curl -sf localhost:8082/readyz && break; sleep 1; done
+      - name: Reconcile 100K transactions with 10% forced redelivery
+        run: node services/simulator/dist/reconcile.js --txns 100000 --dup-rate 0.1 --terminals 1000 --rate 5000
+      - name: Publish-to-persist load test (5,000 msg/s from 1,000 terminals)
+        run: node services/simulator/dist/loadtest.js --terminals 1000 --rate 5000 --duration 30 --api http://localhost:8080
+      - name: Pipeline metrics
+        if: always()
+        run: |
+          curl -s localhost:8081/api/metrics; echo
+          curl -s localhost:8082/api/metrics; echo
+      - name: Gateway logs
+        if: failure()
+        run: tail -n 100 gw-a.log gw-b.log api.log
+
+  images:
+    name: Publish images to GHCR
+    runs-on: ubuntu-latest
+    needs: [build, ml, reconciliation]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase owner
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ env.OWNER }}/terminalpulse:latest,ghcr.io/${{ env.OWNER }}/terminalpulse:${{ github.sha }}
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/ml/Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.OWNER }}/terminalpulse-ml:latest,ghcr.io/${{ env.OWNER }}/terminalpulse-ml:${{ github.sha }}
+          cache-from: type=gha,scope=ml
+          cache-to: type=gha,mode=max,scope=ml

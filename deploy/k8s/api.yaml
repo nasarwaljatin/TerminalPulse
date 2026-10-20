@@ -1,0 +1,40 @@
+# REST + WebSocket + dashboard, plus the singleton jobs (anomaly scoring, retention), which take a
+# Redis lock per run so replicas never double-run them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      containers:
+        - name: api
+          image: terminalpulse/app
+          envFrom:
+            - configMapRef: { name: terminalpulse-config }
+            - secretRef: { name: terminalpulse-secrets }
+          env:
+            - { name: ROLES, value: "api,jobs" }
+            - name: INSTANCE_ID
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { cpu: "1", memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  type: NodePort
+  selector: { app: api }
+  ports:
+    - { port: 8080, targetPort: 8080, nodePort: 30080 }

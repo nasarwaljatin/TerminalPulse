@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+.git
+.github
+.dev-infra
+deploy
+*.md

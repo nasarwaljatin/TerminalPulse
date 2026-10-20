@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: terminalpulse
+resources:
+  - namespace.yaml
+  - config.yaml
+  - postgres.yaml
+  - redis.yaml
+  - mosquitto.yaml
+  - ml.yaml
+  - gateway.yaml
+  - api.yaml
+  - simulator.yaml
+# Images published by .github/workflows/ci.yml. deploy/ec2/bootstrap.sh rewrites OWNER for you.
+images:
+  - name: terminalpulse/app
+    newName: ghcr.io/OWNER/terminalpulse
+    newTag: latest
+  - name: terminalpulse/ml
+    newName: ghcr.io/OWNER/terminalpulse-ml
+    newTag: latest

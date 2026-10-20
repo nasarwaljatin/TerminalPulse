@@ -1,0 +1,23 @@
+# 3x load spike: a second fleet of 1,000 terminals adds ~3,400 txn/s on top of the baseline
+# (~5,100 txn/s total). Watch the HPA react:  kubectl -n terminalpulse get hpa gateway -w
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: loadtest
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: loadtest
+          image: terminalpulse/app
+          command: ["node", "services/simulator/dist/loadtest.js"]
+          env:
+            - { name: MQTT_URL, value: "mqtt://mosquitto:1883" }
+            - { name: API_URL, value: "http://api:8080" }
+            - { name: SIM_TERMINALS, value: "1000" }
+            - { name: SIM_RATE, value: "3400" }
+            - { name: LOADTEST_DURATION_S, value: "300" }
+          resources:
+            requests: { cpu: 200m, memory: 384Mi }

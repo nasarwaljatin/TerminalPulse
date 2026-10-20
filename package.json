@@ -1,0 +1,24 @@
+{
+  "name": "terminalpulse",
+  "private": true,
+  "version": "1.0.0",
+  "description": "IoT payment terminal fleet platform: MQTT ingest, Redis Streams, Postgres, live dashboard, anomaly detection and an MCP server.",
+  "workspaces": [
+    "services/gateway",
+    "services/simulator",
+    "services/mcp-server",
+    "dashboard"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:gateway": "npm run dev -w services/gateway",
+    "dev:dashboard": "npm run dev -w dashboard",
+    "sim": "npm run start -w services/simulator --",
+    "loadtest": "npm run loadtest -w services/simulator --",
+    "reconcile": "npm run reconcile -w services/simulator --"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
