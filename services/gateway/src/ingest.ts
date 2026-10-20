@@ -7,6 +7,13 @@ import { parsePayload, parseTopic } from './messages.js';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Subscription progress, reported by /readyz: a worker is ready once every connection has its SUBACK. */
+export const ingestState = {
+  expected: config.mqttSharedGroup ? Math.max(1, config.mqttIngestConnections) : 1,
+  subscribed: new Set<number>(),
+};
+export const ingestReady = () => ingestState.subscribed.size >= ingestState.expected;
+
 /**
  * MQTT -> Redis Streams.
  *
@@ -25,6 +32,7 @@ export function startIngest(redis: Redis): { stop: () => Promise<void> } {
   const filter = `${config.topicPrefix}/+/+`;
   const subscription = shared ? `$share/${shared}/${filter}` : filter;
   const clients: MqttClient[] = [];
+  ingestState.expected = connections;
 
   for (let i = 0; i < connections; i++) {
     const client = mqtt.connect(config.mqttUrl, {
@@ -56,10 +64,12 @@ export function startIngest(redis: Redis): { stop: () => Promise<void> } {
 
     client.on('connect', () => {
       client.subscribe(subscription, { qos: 1 }, (err) => {
-        if (err) log.error({ err }, 'subscribe failed');
-        else if (i === 0) log.info({ subscription, connections }, 'ingest subscribed');
+        if (err) return log.error({ err }, 'subscribe failed');
+        ingestState.subscribed.add(i);
+        if (ingestReady()) log.info({ subscription, connections }, 'ingest subscribed on all connections');
       });
     });
+    client.on('close', () => ingestState.subscribed.delete(i));
     client.on('error', (err) => log.warn({ err: err.message }, 'mqtt ingest error'));
     clients.push(client);
   }

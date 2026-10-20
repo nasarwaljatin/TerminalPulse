@@ -3,6 +3,7 @@ import { Fleet, cliOptions, sleep } from './fleet.js';
 /**
  * Publish-to-persist load test.
  *   node dist/loadtest.js --terminals 1000 --rate 5000 --duration 60 --api http://localhost:8080
+ * Measurement starts after a 15 s warm-up (--warmup), so connection setup and JIT warm-up are excluded.
  *
  * Drives the fleet at a fixed transaction rate, waits for the pipeline to drain, then asks the
  * gateway for latency percentiles computed from the persisted rows (device ts -> row written),
@@ -11,7 +12,7 @@ import { Fleet, cliOptions, sleep } from './fleet.js';
 const { fleet: base, get, num } = cliOptions();
 const api = get('api', 'API_URL', 'http://localhost:8080').replace(/\/$/, '');
 const durationS = num('duration', 'LOADTEST_DURATION_S', 60);
-const warmupS = num('warmup', 'LOADTEST_WARMUP_S', 5);
+const warmupS = num('warmup', 'LOADTEST_WARMUP_S', 15);
 const maxP99 = num('max-p99', 'LOADTEST_MAX_P99_MS', 0);
 
 const opts = {

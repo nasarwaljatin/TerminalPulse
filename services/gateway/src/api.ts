@@ -9,6 +9,7 @@ import { pool } from './db.js';
 import { log } from './log.js';
 import { metrics } from './metrics.js';
 import { COMMANDS, sendCommand } from './commands.js';
+import { ingestReady, ingestState } from './ingest.js';
 import {
   flaggedTerminals,
   getTerminal,
@@ -70,6 +71,9 @@ export function createApp(redis: Redis, events: Redis) {
     route(async (_req, res) => {
       await pool.query('SELECT 1');
       await redis.ping();
+      if (config.roles.has('ingest') && !ingestReady()) {
+        return res.status(503).json({ ok: false, mqttSubscribed: `${ingestState.subscribed.size}/${ingestState.expected}` });
+      }
       res.json({ ok: true });
     }),
   );
